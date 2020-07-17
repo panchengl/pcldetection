@@ -1,6 +1,6 @@
 import torch.nn as nn
 import torch
-from models.backbone import resnet, mobilenetv2
+from models.backbone import resnet, mobilenetv2, resnext
 from models.fpn_type import fpn
 from models.head_type import normal_head
 from models.loss_type import focal_losses
@@ -8,12 +8,16 @@ from models.anchor_type import anchors
 from models.post_process_type import normal_post_process
 
 model_factory = {
-    'resnet_18': resnet.resnet18,
-    'resnet_34': resnet.resnet34,
-    'resnet_50': resnet.resnet50,
-    'resnet_101': resnet.resnet101,
-    'resnet_152': resnet.resnet152,
-    'mobilenetv_2': mobilenetv2.mobilenet_v2,
+    'resnet_18':        resnet.resnet18,
+    'resnet_34':        resnet.resnet34,
+    'resnet_50':        resnet.resnet50,
+    'resnet_101':       resnet.resnet101,
+    'resnet_152':       resnet.resnet152,
+    "resnext_50":  resnext.resnext50_32x4d,
+    'resnext_101': resnext.resnext101_32x8d,
+    'wide_resnet_50':  resnext.wide_resnet50_2,
+    'wide_resnet_101': resnext.wide_resnet101_2,
+    'mobilenetv_2':     mobilenetv2.mobilenet_v2,
 }
 
 fpn_factory = {
