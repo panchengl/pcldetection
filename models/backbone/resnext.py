@@ -239,7 +239,7 @@ def resnext101_32x8d(num_classes, pretrained=False, progress=True, **kwargs):
                    pretrained, **kwargs)
 
 
-def wide_resnet50_2(pretrained=False, progress=True, **kwargs):
+def wide_resnet50_2(num_classes, pretrained=False, progress=True, **kwargs):
     r"""Wide ResNet-50-2 model from
     `"Wide Residual Networks" <https://arxiv.org/pdf/1605.07146.pdf>`_
 
@@ -253,11 +253,11 @@ def wide_resnet50_2(pretrained=False, progress=True, **kwargs):
         progress (bool): If True, displays a progress bar of the download to stderr
     """
     kwargs['width_per_group'] = 64 * 2
-    return ResNeXt('wide_resnet50_2', Bottleneck, [3, 4, 6, 3],
-                   pretrained, progress, **kwargs)
+    return ResNeXt(num_classes, 'wide_resnet50_2', Bottleneck, [3, 4, 6, 3],
+                   pretrained, **kwargs)
 
 
-def wide_resnet101_2(pretrained=False, progress=True, **kwargs):
+def wide_resnet101_2(num_classes, pretrained=False, progress=True, **kwargs):
     r"""Wide ResNet-101-2 model from
     `"Wide Residual Networks" <https://arxiv.org/pdf/1605.07146.pdf>`_
 
@@ -271,7 +271,7 @@ def wide_resnet101_2(pretrained=False, progress=True, **kwargs):
         progress (bool): If True, displays a progress bar of the download to stderr
     """
     kwargs['width_per_group'] = 64 * 2
-    return ResNeXt('wide_resnet101_2', Bottleneck, [3, 4, 23, 3],
+    return ResNeXt(num_classes, 'wide_resnet101_2', Bottleneck, [3, 4, 23, 3],
                    pretrained, progress, **kwargs)
 
 if __name__ == "__main__":

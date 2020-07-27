@@ -8,7 +8,7 @@ from models.dataloader_type.dataloader import collater, AspectRatioBasedSampler
 from models.util import load_model, create_datastes
 from utils.eval_util import evaluate_datasets
 from models.network import create_network
-from cfgs.retinanet_resnet_wide_cfg import model_cfg as cfg
+from cfgs.retinanet_resneXt_cfg import model_cfg as cfg
 
 assert torch.__version__.split('.')[0] == '1'
 os.environ["CUDA_VISIBLE_DEVICES"] = cfg["use_gpus"]
