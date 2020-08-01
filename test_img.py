@@ -5,7 +5,7 @@ import os
 import cv2
 from models.network import create_network
 
-os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+os.environ["CUDA_VISIBLE_DEVICES"] = "3"
 def load_classes(csv_reader):
     result = {}
 
@@ -39,11 +39,11 @@ def draw_caption(image, box, caption):
 def detect_image(model_cfg, inference_cfg):
     with open(model_cfg["dataset"]["csv_classes"], 'r') as f:
         classes = load_classes_names(f)
-
     labels = {}
     for key, value in classes.items():
         labels[value] = key
     model = create_network(model_cfg)
+    model = model.cuda()
     model = torch.nn.DataParallel(model).cuda()
     checkpoint_dict = torch.load(inference_cfg["test_model_path"])
     print("checkpoint is ", checkpoint_dict['net'].keys())
@@ -65,8 +65,8 @@ def detect_image(model_cfg, inference_cfg):
         smallest_side = min(rows, cols)
 
         # rescale the image so the smallest side is min_side
-        min_side = 608
-        max_side = 1024
+        min_side = inference_cfg["input_size"][0]
+        max_side = inference_cfg["input_size"][1]
         scale = min_side / smallest_side
 
         # check if the largest side is now greater than max_side, which can happen
@@ -133,19 +133,8 @@ def detect_image(model_cfg, inference_cfg):
 
 if __name__ == '__main__':
 
-    # parser = argparse.ArgumentParser(description='Simple script for visualizing result of training.')
-    #
-    # parser.add_argument('--image_dir', help='Path to directory containing images', default="img_dir/dianli_img")
-    # parser.add_argument('--model_path', help='Path to model', default="checkpoint/csv_retinanet_epoch_12_resnet_101_map_0.538_lr_1e-05.pt")
-    # # parser.add_argument('--model_path', help='Path to model', default="/home/pcl/pytorch_work/my_github/retinanet/checkpoint/csv_retinanet_epoch_19_resnet_101_map_0.793_lr_1e-05.pt")
-    # # parser.add_argument('--class_list', help='Path to CSV file listing class names (see README)', default="data/voc.names")
-    # parser.add_argument('--class_list', help='Path to CSV file listing class names (see README)', default="data/dianli.names")
-    # parser.add_argument('--net_name', help='backbone name to construnction network', default="resnet_101")
-    # parser.add_argument('--conf', help='confidence of result', default=0.3)
-    #
-    # parser = parser.parse_args()
-
-    from cfgs.retinanet_cfg import model_cfg, inference_cfg
-
-
+    # from cfgs.retinanet_cfg import model_cfg, inference_cfg
+    # from cfgs.retinanet_resnet_wide_cfg import model_cfg, inference_cfg
+    # from cfgs.retinanet_resneXt_cfg import model_cfg, inference_cfg
+    from cfgs.fcosnet_cfg import model_cfg, inference_cfg
     detect_image(model_cfg, inference_cfg)

@@ -3,11 +3,11 @@ model_cfg = dict(
     type='retinanet',
     input_size=[608, 1024],
     use_gpus="0,1",
-    batch_size=16,
+    batch_size=6,
     num_workers=3,
     lr = 1e-5,
     save_dir = 'checkpoint/',
-    restore_path = 'checkpoint/csv_retinanet_epoch_0_resnet_50_map_0.075_lr_1e-05.pt',
+    restore_path = '',
     epochs = 100,
     iou_threshold=0.5,
     score_threshold=0.05,
@@ -20,8 +20,8 @@ model_cfg = dict(
         csv_classes = './data/voc.names',
         num_classes=20),
     backbone=dict(
-        type='resnet',
-        depth='50',
+        type='resnext',
+        depth='101',
         block="bottlenect"),
     fpn=dict(
         type='normal_fpn',
@@ -45,7 +45,7 @@ model_cfg = dict(
 )
 inference_cfg = dict(
     test_img_dir = "img_dir/voc",
-    test_model_path = 'checkpoint/csv_retinanet_epoch_12_resnet_101_map_0.538_lr_1e-05.pt',
+    test_model_path = 'checkpoint/csv_retinanet_epoch_10_resnext_101_map_0.82_lr_1e-05.pt',
     conf = 0.3,
 )
 

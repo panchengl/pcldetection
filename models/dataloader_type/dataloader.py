@@ -18,6 +18,7 @@ import skimage.color
 import skimage
 
 from PIL import Image
+import math
 
 class CocoDataset(Dataset):
     """Coco dataset."""
@@ -127,7 +128,7 @@ class CocoDataset(Dataset):
 class CSVDataset(Dataset):
     """CSV dataset."""
 
-    def __init__(self, train_file, class_list, transform=None):
+    def __init__(self, train_file, class_list, transform=None, add_backbround=False):
         """
         Args:
             train_file (string): CSV file with training annotations
@@ -137,7 +138,7 @@ class CSVDataset(Dataset):
         self.train_file = train_file
         self.class_list = class_list
         self.transform = transform
-
+        self.add_backbround = add_backbround
         # parse the provided class file
         try:
             with open(self.class_list, 'r') as file:
@@ -237,8 +238,10 @@ class CSVDataset(Dataset):
             annotation[0, 1] = y1
             annotation[0, 2] = x2
             annotation[0, 3] = y2
-
-            annotation[0, 4] = self.name_to_label(a['class'])
+            if self.add_backbround:
+                annotation[0, 4] = (self.name_to_label(a['class']) + 1)
+            else:
+                annotation[0, 4] = self.name_to_label(a['class'])
             annotations = np.append(annotations, annotation, axis=0)
 
         return annotations
@@ -326,8 +329,13 @@ def collater(data):
 
 class Resizer(object):
     """Convert ndarrays in sample to Tensors."""
+    def __init__(self, min_side=608, max_side=1024):
+        self.min_side = min_side
+        self.max_side = max_side
 
-    def __call__(self, sample, min_side=608, max_side=1024):
+
+    # def __call__(self, sample, min_side=608, max_side=1024):
+    def __call__(self, sample):
         image, annots = sample['img'], sample['annot']
         # print("image shape is", image.shape)
         rows, cols, cns = image.shape
@@ -335,14 +343,16 @@ class Resizer(object):
         smallest_side = min(rows, cols)
 
         # rescale the image so the smallest side is min_side
-        scale = min_side / smallest_side
+        # scale = min_side / smallest_side
+        scale = self.min_side / smallest_side
 
         # check if the largest side is now greater than max_side, which can happen
         # when images have a large aspect ratio
         largest_side = max(rows, cols)
 
-        if largest_side * scale > max_side:
-            scale = max_side / largest_side
+        if largest_side * scale > self.max_side:
+            scale = self.max_side / largest_side
+            # scale = max_side / largest_side
 
         # resize the image with the computed scale
         image = skimage.transform.resize(image, (int(round(rows * scale)), int(round((cols * scale)))))
@@ -388,9 +398,9 @@ class Augmenter(object):
 
 class Normalizer(object):
 
-    def __init__(self):
-        self.mean = np.array([[[0.485, 0.456, 0.406]]])
-        self.std = np.array([[[0.229, 0.224, 0.225]]])
+    def __init__(self, mean, std):
+        self.mean = np.array([[mean]])
+        self.std = np.array([[std]])
 
     def __call__(self, sample):
         image, annots = sample['img'], sample['annot']
@@ -419,6 +429,74 @@ class UnNormalizer(object):
         for t, m, s in zip(tensor, self.mean, self.std):
             t.mul_(s).add_(m)
         return tensor
+
+
+
+def random_crop(img, boxes):
+    '''Crop the given PIL image to a random size and aspect ratio.
+
+    A crop of random size of (0.08 to 1.0) of the original size and a random
+    aspect ratio of 3/4 to 4/3 of the original aspect ratio is made.
+
+    Args:
+      img: (PIL.Image) image to be cropped.
+      boxes: (tensor) object boxes, sized [#ojb,4].
+
+    Returns:
+      img: (PIL.Image) randomly cropped image.
+      boxes: (tensor) randomly cropped boxes.
+    '''
+    success = False
+    for attempt in range(10):
+        area = img.size[0] * img.size[1]
+        target_area = random.uniform(0.56, 1.0) * area
+        aspect_ratio = random.uniform(3. / 4, 4. / 3)
+
+        w = int(round(math.sqrt(target_area * aspect_ratio)))
+        h = int(round(math.sqrt(target_area / aspect_ratio)))
+
+        if random.random() < 0.5:
+            w, h = h, w
+
+        if w <= img.size[0] and h <= img.size[1]:
+            x = random.randint(0, img.size[0] - w)
+            y = random.randint(0, img.size[1] - h)
+            success = True
+            break
+
+    # Fallback
+    if not success:
+        w = h = min(img.size[0], img.size[1])
+        x = (img.size[0] - w) // 2
+        y = (img.size[1] - h) // 2
+
+    img = img.crop((x, y, x+w, y+h))
+    boxes -= torch.Tensor([x,y,x,y])
+    boxes[:,0::2].clamp_(min=0, max=w-1)
+    boxes[:,1::2].clamp_(min=0, max=h-1)
+    return img, boxes
+
+def center_crop(img, boxes, size):
+    '''Crops the given PIL Image at the center.
+
+    Args:
+      img: (PIL.Image) image to be cropped.
+      boxes: (tensor) object boxes, sized [#ojb,4].
+      size (tuple): desired output size of (w,h).
+
+    Returns:
+      img: (PIL.Image) center cropped image.
+      boxes: (tensor) center cropped boxes.
+    '''
+    w, h = img.size
+    ow, oh = size
+    i = int(round((h - oh) / 2.))
+    j = int(round((w - ow) / 2.))
+    img = img.crop((j, i, j+ow, i+oh))
+    boxes -= torch.Tensor([j,i,j,i])
+    boxes[:,0::2].clamp_(min=0, max=ow-1)
+    boxes[:,1::2].clamp_(min=0, max=oh-1)
+    return img, boxes
 
 
 class AspectRatioBasedSampler(Sampler):
@@ -452,12 +530,14 @@ class AspectRatioBasedSampler(Sampler):
 
 if __name__ == "__main__":
     import torchvision
-    csv_train = '/home/pcl/pytorch_work/my_github/retinanet/data/dianli_zky5label_train_r.txt'
-    names_classes = "/home/pcl/pytorch_work/my_github/retinanet/data/dianli.names"
+    csv_train = '/home/pcl/pytorch_work/my_github/pcldetection/data/train.txt'
+    names_classes = "/home/pcl/pytorch_work/my_github/pcldetection/data/voc.names"
+    mean = [0.485, 0.456, 0.406]      # mean is not effect, fixed this value in code
+    std = [0.229, 0.224, 0.225]
     dataset_train = CSVDataset(train_file=csv_train, class_list=names_classes,
-                               transform=transforms.Compose([Normalizer(), Augmenter(), Resizer()]))
+                               transform=transforms.Compose([Normalizer(std=std, mean=mean), Augmenter(), Resizer(min_side=800, max_side=1333)]), add_backbround=True)
 
-    sampler = AspectRatioBasedSampler(dataset_train, batch_size=8, drop_last=False)
+    sampler = AspectRatioBasedSampler(dataset_train, batch_size=4, drop_last=False)
     dataloader_train = DataLoader(dataset_train, num_workers=1, collate_fn=collater, batch_sampler=sampler)
 
     for dict_data in dataloader_train:
@@ -465,11 +545,18 @@ if __name__ == "__main__":
         print("beginig itera")
         print(padded_imgs.size())
         print(annot_padded.size())
-        # print(annot_padded)
+        print(annot_padded)
         print(scales)
-        grid = torchvision.utils.make_grid(padded_imgs, 1)
-        torchvision.utils.save_image(grid, 'b.jpg')
+        # only_imgs = padded_imgs
+        # only_boxes = annot_padded[:,:,:-1]
+        # only_labels = annot_padded[:,:,-1]
+        # # print("only boxes is", only_boxes)
+        # print("only boxes is", only_boxes.shape)
+        # print("only labels is", only_labels)
+        # print("only labels is", only_labels.shape)
+        # grid = torchvision.utils.make_grid(padded_imgs, 1)
+        # torchvision.utils.save_image(grid, 'b.jpg')
         print("finished")
         print("finished")
         print("finished")
-        break
+        # break

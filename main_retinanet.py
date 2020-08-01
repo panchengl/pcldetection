@@ -13,8 +13,7 @@ from cfgs.retinanet_cfg import model_cfg as cfg
 assert torch.__version__.split('.')[0] == '1'
 os.environ["CUDA_VISIBLE_DEVICES"] = cfg["use_gpus"]
 def main():
-    dataset_train, dataset_val = create_datastes(cfg["dataset"]["type"], input_size=cfg["input_size"], cfgcoco_path=cfg["dataset"]["path"], csv_train=cfg["dataset"]["csv_train"],
-                                                 csv_val=cfg["dataset"]["csv_val"], csv_classes=cfg["dataset"]["csv_classes"])
+    dataset_train, dataset_val = create_datastes(cfg)
     sampler = AspectRatioBasedSampler(dataset_train, batch_size=cfg["batch_size"], drop_last=True)
     dataloader_train = DataLoader(dataset_train, num_workers=cfg["num_workers"], collate_fn=collater, batch_sampler=sampler)
     # Create the model

@@ -1,11 +1,11 @@
 import torch.nn as nn
 import torch
 from models.backbone import resnet, mobilenetv2, resnext
-from models.fpn_type import fpn
-from models.head_type import normal_head
-from models.loss_type import focal_losses
+from models.fpn_type import fpn, fcos_fpn
+from models.head_type import retinanet_head, fcos_head
+from models.loss_type import retinanet_loss, fcosnet_loss
 from models.anchor_type import anchors
-from models.post_process_type import normal_post_process
+from models.post_process_type import retinanet_post_process, fcos_post_process
 
 model_factory = {
     'resnet_18':        resnet.resnet18,
@@ -22,26 +22,34 @@ model_factory = {
 
 fpn_factory = {
     "normal_fpn": fpn.FPN,
+    "fcosnet_fpn": fcos_fpn.FPN,
 }
 
 head_factory = {
-    "normal_head_class": normal_head.ClassificationHead,
-    "normal_head_regression": normal_head.RegressionHead,
+    "normal_head_class": retinanet_head.ClassificationHead,
+    "normal_head_regression": retinanet_head.RegressionHead,
+    "fcos_head": fcos_head.class_centerness_regression_head,
 }
 
 loss_factory = {
-    "focal_loss":  focal_losses.FocalLoss,
+    "focal_loss":  retinanet_loss.FocalLoss,
+    "fcosnet_loss": fcosnet_loss.LOSS
 }
 
 anchors_factory = {
     "normal_anchor": anchors.Anchors
 }
 
+post_precess_factory = {
+    "normal_postprocess": retinanet_post_process.post_process,
+    "fcosnet_postprocess": fcos_post_process.fcosnet_post_process,
+}
 class create_network(nn.Module):
     def __init__(self, model_config):
         super(create_network, self).__init__()
         self.model_config = model_config
         self.is_training = False
+        self.algorithm = self.model_config["type"]
         def build_backbone():
             backbone_type = self.model_config["backbone"]["type"] + '_' + self.model_config["backbone"]["depth"]
             backbone_module = model_factory[backbone_type](num_classes=self.model_config["dataset"]["num_classes"], pretrained=True)
@@ -54,12 +62,19 @@ class create_network(nn.Module):
 
         def build_head():
             head_type = self.model_config["head"]["type"]
-            num_anchors = len(self.model_config["anchor"]["anchor_scales"]) * len(self.model_config["anchor"]["anchor_rations"])
-            fpn_output_channels =  self.model_config["head"]["output_channels"]
+            fpn_output_channels = self.model_config["head"]["output_channels"]
             num_classes = self.model_config["dataset"]["num_classes"]
-            regression_module = head_factory[head_type +'_regression'](fpn_output_channels=fpn_output_channels, num_anchors=num_anchors, regression_channels=fpn_output_channels)
-            classification_module = head_factory[head_type + '_class'](fpn_output_channels=fpn_output_channels, num_anchors=num_anchors, num_classes=num_classes, classify_channels=fpn_output_channels)
-            return classification_module, regression_module
+            if head_type == "normal_head":
+                num_anchors = len(self.model_config["anchor"]["anchor_scales"]) * len(self.model_config["anchor"]["anchor_rations"])
+                regression_module = head_factory[head_type +'_regression'](fpn_output_channels=fpn_output_channels, num_anchors=num_anchors, regression_channels=fpn_output_channels)
+                classification_module = head_factory[head_type + '_class'](fpn_output_channels=fpn_output_channels, num_anchors=num_anchors, num_classes=num_classes, classify_channels=fpn_output_channels)
+                return classification_module, regression_module
+            elif head_type == "fcos_head":
+                class_centerness_reg_module = head_factory[head_type](fpn_output_channels=fpn_output_channels, class_num=num_classes, output_channels=fpn_output_channels,
+                                                                      grounp_norm=self.model_config["head"]["grounp_norm"], prior=self.model_config["head"]["prior"])
+                return class_centerness_reg_module
+            else:
+                raise ValueError("thie code version only support retinanet_head and fcosnet_head")
 
         def build_loss():
             loss_type = self.model_config["loss"]["type"]
@@ -76,11 +91,22 @@ class create_network(nn.Module):
 
         self.backbone = build_backbone()
         self.fpn      = build_fpn()
-        self.ClassificationHead, self.RegressionHead = build_head()
+        if self.algorithm == "retinanet":
+            self.ClassificationHead, self.RegressionHead = build_head()
+            self.anchors = build_anchor()
+            self.post_process = retinanet_post_process.post_process()
+        elif self.algorithm == "fcosnet":
+            self.fpn = build_fpn()
+            self.class_centerness_reg_module = build_head()
+            self.target_layer = fcosnet_loss.GenTargets(strides=self.model_config["strides"], limit_range=self.model_config["limit_range"])
+            # self.post_process = fcos_post_process.fcosnet_post_process()
+            from models.post_process_type.fcos_post_process import DetectHead, ClipBoxes
+            self.detection_head = DetectHead(score_threshold=0.05, nms_iou_threshold=0.5,
+                                             max_detection_boxes_num=1000, strides=self.model_config["strides"])
+            self.clip_boxes = ClipBoxes()
+            # self.            scores, classes, boxes = self.detection_head(out)
+            # boxes = self.clip_boxes(img_batch, boxes)
         self.loss     = build_loss()
-        self.anchors   = build_anchor()
-        self.post_process = normal_post_process.post_process()
-
 
     def forward(self, inputs, is_training=False):
         self.is_training = is_training
@@ -90,13 +116,29 @@ class create_network(nn.Module):
             img_batch = inputs
         features = self.backbone(img_batch)
         features = self.fpn(features)
-        regressions = torch.cat([self.RegressionHead(feature) for feature in features], dim=1)
-        classifications = torch.cat([self.ClassificationHead(feature) for feature in features], dim=1)
-        anchors = self.anchors(img_batch)
-        if self.is_training:
-            return  self.loss(classifications, regressions, anchors, annotations, self.model_config["loss"]["positive_iou_thr"], self.model_config["loss"]["negative_iou_thr"])
-        else:
-            return self.post_process(input_batch=img_batch, anchors=anchors, regressions=regressions, classifications=classifications)
+        if self.algorithm == "retinanet":
+            regressions = torch.cat([self.RegressionHead(feature) for feature in features], dim=1)
+            classifications = torch.cat([self.ClassificationHead(feature) for feature in features], dim=1)
+            anchors = self.anchors(img_batch)
+            if self.is_training:
+                return  self.loss(classifications, regressions, anchors, annotations, self.model_config["loss"]["positive_iou_thr"], self.model_config["loss"]["negative_iou_thr"])
+            else:
+                return self.post_process(input_batch=img_batch, anchors=anchors, regressions=regressions, classifications=classifications)
+        elif self.algorithm == "fcosnet":
+            classifications, centerness_preds, regressions = self.class_centerness_reg_module(features)
+            out = [classifications, centerness_preds, regressions]
+            add_centerness = self.model_config["add_centerness"]
+            if self.is_training:
+                batch_boxes = annotations[:, :, :-1]
+                batch_labels = annotations[:, :, -1]
+                targets = self.target_layer([out, batch_boxes, batch_labels])
+                return self.loss([out, targets], add_centerness)
+            else:
+                # scores, classes, boxes = self.post_process(out, batch_imgs=img_batch, score_threshold=0.05, nms_iou_threshold=0.5, max_detection_boxes_num=self.model_config["max_detections"],
+                #                                            strides=self.model_config["strides"], add_centerness=add_centerness)
+                scores, classes, boxes = self.detection_head(out)
+                boxes = self.clip_boxes(img_batch, boxes)
+                return  scores, classes, boxes
 
     def freeze_bn(self):
         '''Freeze BatchNorm layers.'''
@@ -107,7 +149,7 @@ class create_network(nn.Module):
 if __name__ == "__main__":
     from cfgs.retinanet_cfg import model_cfg
     from torch.autograd import Variable
-    model = create_network(model_cfg, is_training=False)
+    model = create_network(model_cfg)
     scores, labels, boxes = model(Variable(torch.randn(8, 3,224,224)))
     print(scores.size())
     print(labels.size())

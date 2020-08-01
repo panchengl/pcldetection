@@ -192,14 +192,17 @@ def load_model(model, optimizer, model_dir):
     print("finished restore model from {}, backbone is {}, retrain from epoch {}".format(model_dir, net_name, str(current_epoch)))
     return model, optimizer, current_epoch
 
-def create_datastes(dataset_type, **kwargs):
+def create_datastes(cfg, **kwargs):
     from models.dataloader_type.dataloader import CSVDataset, Resizer, Augmenter, Normalizer, CocoDataset
     from torchvision import transforms
-    input_size = kwargs['input_size']
+    min_side, max_side = cfg['input_size']
+    dataset_type, input_size = cfg["dataset"]["type"], cfg["input_size"]
+    mean, std = cfg["mean"], cfg["std"]
     if dataset_type == 'coco':
-        if kwargs["coco_path"] is None:
+        try:
+            coco_path = cfg["dataset"]["coco_path"]
+        except:
             raise ValueError("coco dataset must provide coco dir")
-        coco_path = kwargs["coco_path"]
         if coco_path is None:
             raise ValueError('Must provide --coco_path when training on COCO,')
         dataset_train = CocoDataset(coco_path, set_name='train2017',
@@ -207,15 +210,17 @@ def create_datastes(dataset_type, **kwargs):
         dataset_val = CocoDataset(coco_path, set_name='val2017',
                                   transform=transforms.Compose([Normalizer(), Resizer()]))
     elif dataset_type == 'csv':
-        if  kwargs['csv_train'] is None or kwargs["csv_val"] is None or kwargs["csv_classes"] is None:
-            raise ValueError('network training must provide train file and val file and classes file')
-        csv_train = kwargs['csv_train']
-        csv_val = kwargs["csv_val"]
-        csv_classes = kwargs['csv_classes']
+        try:
+            csv_train, csv_val, csv_classes = cfg["dataset"]["csv_train"], cfg["dataset"]["csv_val"], cfg["dataset"]["csv_classes"]
+            add_background = cfg["dataset"]["add_background"]
+        except:
+            raise ValueError("csv dataset must provide csv dir names")
         dataset_train = CSVDataset(train_file=csv_train, class_list=csv_classes,
-                                   transform=transforms.Compose([Normalizer(), Augmenter(), Resizer()]))
-        dataset_val = CSVDataset(train_file=csv_val, class_list=csv_classes,
-                                 transform=transforms.Compose([Normalizer(), Resizer()]))
+                                   transform=transforms.Compose([Normalizer(mean=mean, std=std), Augmenter(), Resizer(min_side=min_side, max_side=max_side)]), add_backbround=add_background)
+        dataset_val = CSVDataset(train_file=csv_val, class_list=csv_classes,transform=transforms.Compose([Normalizer(mean=mean, std=std), Resizer(min_side=min_side, max_side=max_side)]))# be careful, val dataset must use add_background=False
+        if add_background:
+            print("be careful, this algorithm use background as label 0 when model is training , class_id becomes class_num+1, just like label0 -> {}".format(1))
+            print("test model will auto change back")
     else:
         raise ValueError('Dataset type not understood (must be csv or coco), exiting.')
 

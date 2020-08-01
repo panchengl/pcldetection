@@ -1,9 +1,6 @@
 
 import torch
 import torch.nn as nn
-from .config import DefaultConfig
-
-
 
 
 def coords_fmap2orig(feature,stride):
@@ -79,7 +76,7 @@ class GenTargets(nn.Module):
         class_num=cls_logits.shape[1]
         m=gt_boxes.shape[1]
 
-        cls_logits=cls_logits.permute(0,2,3,1) #[batch_size,h,w,class_num]  
+        cls_logits=cls_logits.permute(0,2,3,1) #[batch_size,h,w,class_num]
         coords=coords_fmap2orig(cls_logits,stride).to(device=gt_boxes.device)#[h*w,2]
 
         cls_logits=cls_logits.reshape((batch_size,-1,class_num))#[batch_size,h*w,class_num]  
@@ -154,7 +151,7 @@ class GenTargets(nn.Module):
 
 def compute_cls_loss(preds,targets,mask):
     '''
-    Args  
+    Args
     preds: list contains five level pred [batch_size,class_num,_h,_w]
     targets: [batch_size,sum(_h*_w),1]
     mask: [batch_size,sum(_h*_w)]
@@ -162,6 +159,7 @@ def compute_cls_loss(preds,targets,mask):
     batch_size=targets.shape[0]
     preds_reshape=[]
     class_num=preds[0].shape[1]
+    # print("class_num is", class_num)
     mask=mask.unsqueeze(dim=-1)
     # mask=targets>-1#[batch_size,sum(_h*_w),1]
     num_pos=torch.sum(mask,dim=[1,2]).clamp_(min=1).float()#[batch_size,]
@@ -175,7 +173,11 @@ def compute_cls_loss(preds,targets,mask):
     for batch_index in range(batch_size):
         pred_pos=preds[batch_index]#[sum(_h*_w),class_num]
         target_pos=targets[batch_index]#[sum(_h*_w),1]
+        # print("target_pos is", target_pos)
+        # print("target_pos is", target_pos.shape)
+        # print("torch.arange(1,class_num+1,device=target_pos.device)[None,:] is", torch.arange(1,class_num,device=target_pos.device)[None,:])
         target_pos=(torch.arange(1,class_num+1,device=target_pos.device)[None,:]==target_pos).float()#sparse-->onehot
+        # target_pos=(torch.arange(0,class_num,device=target_pos.device)[None,:]==target_pos).float()#sparse-->onehot
         loss.append(focal_loss_from_logits(pred_pos,target_pos).view(1))
     return torch.cat(loss,dim=0)/num_pos#[batch_size,]
 
@@ -290,16 +292,11 @@ def focal_loss_from_logits(preds,targets,gamma=2.0,alpha=0.25):
     return loss.sum()
 
 
-
-
 class LOSS(nn.Module):
-    def __init__(self,config=None):
+    def __init__(self):
         super().__init__()
-        if config is None:
-            self.config=DefaultConfig
-        else:
-            self.config=config
-    def forward(self,inputs):
+
+    def forward(self,inputs, add_centerness):
         '''
         inputs list
         [0]preds:  ....
@@ -312,15 +309,12 @@ class LOSS(nn.Module):
         cls_loss=compute_cls_loss(cls_logits,cls_targets,mask_pos).mean()#[]
         cnt_loss=compute_cnt_loss(cnt_logits,cnt_targets,mask_pos).mean()
         reg_loss=compute_reg_loss(reg_preds,reg_targets,mask_pos).mean()
-        if self.config.add_centerness:
+        if add_centerness:
             total_loss=cls_loss+cnt_loss+reg_loss
             return cls_loss,cnt_loss,reg_loss,total_loss
         else:
             total_loss=cls_loss+reg_loss+cnt_loss*0.0
             return cls_loss,cnt_loss,reg_loss,total_loss
-
-
-
 
 
 if __name__=="__main__":

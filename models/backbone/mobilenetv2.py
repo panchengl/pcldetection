@@ -4,9 +4,9 @@ from torch.autograd import Variable
 from models.fpn_type.fpn import FPN
 from torchvision.ops import nms
 
-from models.head_type.normal_head import ClassificationHead, RegressionHead, ClassificationModel_variety_input, RegressionModel_variety_input
+from models.head_type.retinanet_head import ClassificationHead, RegressionHead, ClassificationModel_variety_input, RegressionModel_variety_input
 from models.anchor_type.anchors import Anchors
-from models.loss_type.focal_losses import FocalLoss
+from models.loss_type.retinanet_loss import FocalLoss
 from models.util import generate_predict_boxes, adjust_boxes
 
 import torch.utils.model_zoo as model_zoo
