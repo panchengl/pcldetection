@@ -3,13 +3,13 @@ In this project, i want to reproduce some object detections,now, just make retin
 voc dataset: first commit voc/coco map,  letterbox_resize(u can easily get this result from official pretrained models):
 
 
-    voc(input_size(608, 1024)): retinanet(epoch)        fcosnet(epoch)
+    voc(input_size(608, 1024)): retinanet(epoch)        fcosnet(epoch)        fcosnet(epoch-1333x800)
 
-        1.resnet_50             0.777(16)               0.763(18)
+        1.resnet_50             0.777(16)               0.763(18)             0.773(11)
 
-        2.resnet_101            0.792(19)               0.792(19)
+        2.resnet_101            0.792(19)               0.792(19)             0.803(14)
 
-        3.resnext_50_32x4d      0.793(16)               0.769(15)
+        3.resnext_50_32x4d      0.793(16)               0.769(15)             0.786(16)
 
         4.resnext_101_64x8d     0.825(10)               0.815(16)
 
@@ -37,5 +37,16 @@ coco dataset:
          Average Recall     (AR) @[ IoU=0.50:0.95 | area=medium | maxDets=100 ] = 0.532
          Average Recall     (AR) @[ IoU=0.50:0.95 | area= large | maxDets=100 ] = 0.641
 
-fcosnet:
+how to train your own dataset:
 
+    1. create dataset, make your dataset become txt file: just like this:
+
+        img_id img_dir width height label xmin ymin xmax ymax
+        1 dir/img1.jpg width height label1 xmin ymin xmax ymax label2 xmin ymin xmax ymax .......
+        2 dir/img2.jpg width height label1 xmin ymin xmax ymax .......
+
+    2.create label.names just like data/voc.names in my code
+
+    3.edit train/val file in cfg/net_config.py
+
+    4.python main_fcos.py/main_retinanet.py
