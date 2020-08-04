@@ -93,9 +93,6 @@ class DetectHead(nn.Module):
             _cls_scores_post.append(_cls_scores_b[nms_ind])
             _cls_classes_post.append(_cls_classes_b[nms_ind])
             _boxes_post.append(_boxes_b[nms_ind])
-
-        scores, classes, boxes = torch.stack(_cls_scores_post, dim=0), torch.stack(_cls_classes_post, dim=0), torch.stack(_boxes_post, dim=0)
-        # return _cls_scores_post, _cls_classes_post, _boxes_post
         return _cls_scores_post[0], _cls_classes_post[0], _boxes_post[0]
 
         # return scores, classes, boxes

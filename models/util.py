@@ -206,9 +206,9 @@ def create_datastes(cfg, **kwargs):
         if coco_path is None:
             raise ValueError('Must provide --coco_path when training on COCO,')
         dataset_train = CocoDataset(coco_path, set_name='train2017',
-                                    transform=transforms.Compose([Normalizer(), Augmenter(), Resizer()]))
+                                    transform=transforms.Compose([Normalizer(mean=mean, std=std), Augmenter(), Resizer(min_side=min_side, max_side=max_side)]))
         dataset_val = CocoDataset(coco_path, set_name='val2017',
-                                  transform=transforms.Compose([Normalizer(), Resizer()]))
+                                  transform=transforms.Compose([Normalizer(mean=mean, std=std), Resizer(min_side=min_side, max_side=max_side)]))
     elif dataset_type == 'csv':
         try:
             csv_train, csv_val, csv_classes = cfg["dataset"]["csv_train"], cfg["dataset"]["csv_val"], cfg["dataset"]["csv_classes"]
