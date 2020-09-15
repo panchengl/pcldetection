@@ -63,6 +63,9 @@ prune model:
         this code i will update in some times
 
         20200913 updates: the first public prune version only support L1_norm pruning and only support resnet, u can just edit backbone in net_cfg.py
+        
+                          becareful: global l1-nnorm pruning is not effective, in my expercence and other project(yolov3_prune and centernet_prune), global pruning is ok
+
 
 add quant_code:
 
