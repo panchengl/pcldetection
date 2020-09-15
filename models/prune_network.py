@@ -1,6 +1,6 @@
 import torch.nn as nn
 import torch
-from models.backbone import resnet, mobilenetv2, resnext
+from models.backbone import resnet, mobilenetv2, resnext, prune_resnet
 from models.fpn_type import fpn, fcos_fpn
 from models.head_type import retinanet_head, fcos_head
 from models.loss_type import retinanet_loss, fcosnet_loss
@@ -9,16 +9,19 @@ from models.post_process_type import retinanet_post_process, fcos_post_process
 from models.post_process_type.fcos_post_process import DetectHead, ClipBoxes
 
 model_factory = {
-    'resnet_18':        resnet.resnet18,
-    'resnet_34':        resnet.resnet34,
-    'resnet_50':        resnet.resnet50,
-    'resnet_101':       resnet.resnet101,
-    'resnet_152':       resnet.resnet152,
-    "resnext_50":  resnext.resnext50_32x4d,
-    'resnext_101': resnext.resnext101_32x8d,
-    'wide_resnet_50':  resnext.wide_resnet50_2,
-    'wide_resnet_101': resnext.wide_resnet101_2,
-    'mobilenetv_2':     mobilenetv2.mobilenet_v2,
+    # 'resnet_18':        resnet.resnet18,
+    # 'resnet_34':        resnet.resnet34,
+    # 'resnet_50':        resnet.resnet50,
+    # 'resnet_101':       resnet.resnet101,
+    # 'resnet_152':       resnet.resnet152,
+    # "resnext_50":  resnext.resnext50_32x4d,
+    # 'resnext_101': resnext.resnext101_32x8d,
+    # 'wide_resnet_50':  resnext.wide_resnet50_2,
+    # 'wide_resnet_101': resnext.wide_resnet101_2,
+    # 'mobilenetv_2':     mobilenetv2.mobilenet_v2,
+    'prune_resnet_50':  prune_resnet.prune_resnet_50,
+    'prune_resnet_101':  prune_resnet.prune_resnet_101,
+    'prune_resnet_152':  prune_resnet.prune_resnet_152,
 }
 
 fpn_factory = {
@@ -45,15 +48,18 @@ post_precess_factory = {
     "normal_postprocess": retinanet_post_process.post_process,
     "fcosnet_postprocess": fcos_post_process.fcosnet_post_process,
 }
-class create_network(nn.Module):
-    def __init__(self, model_config):
-        super(create_network, self).__init__()
+class create_network_prune(nn.Module):
+    def __init__(self, model_config, activate_channels_list, save_channels_list):
+        super(create_network_prune, self).__init__()
         self.model_config = model_config
         self.is_training = False
         self.algorithm = self.model_config["type"]
+        self.activate_channels_list = activate_channels_list
+        self.save_channels_list = save_channels_list
+        # self.net = net
         def build_backbone():
-            backbone_type = self.model_config["backbone"]["type"] + '_' + self.model_config["backbone"]["depth"]
-            backbone_module = model_factory[backbone_type](num_classes=self.model_config["dataset"]["num_classes"], pretrained=True)
+            backbone_type = "prune_" + self.model_config["backbone"]["type"] + '_' + self.model_config["backbone"]["depth"]
+            backbone_module = model_factory[backbone_type](num_classes=self.model_config["dataset"]["num_classes"], activate_channels_list=self.activate_channels_list, save_channels_list=self.save_channels_list)
             return backbone_module
 
         def build_fpn():
@@ -105,6 +111,10 @@ class create_network(nn.Module):
         self.loss     = build_loss()
 
     def forward(self, inputs, is_training=False):
+        """
+
+        :type is_training: object
+        """
         self.is_training = is_training
         if self.is_training:
             img_batch, annotations = inputs
@@ -143,7 +153,7 @@ class create_network(nn.Module):
 if __name__ == "__main__":
     from cfgs.retinanet_cfg import model_cfg
     from torch.autograd import Variable
-    model = create_network(model_cfg)
+    model = create_network_prune(model_cfg)
     scores, labels, boxes = model(Variable(torch.randn(8, 3,224,224)))
     print(scores.size())
     print(labels.size())

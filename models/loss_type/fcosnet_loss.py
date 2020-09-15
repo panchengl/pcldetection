@@ -22,6 +22,9 @@ def coords_fmap2orig(feature,stride):
     coords = torch.stack([shift_x, shift_y], -1) + stride // 2
     return coords
 
+
+
+
 class GenTargets(nn.Module):
     def __init__(self,strides,limit_range):
         super().__init__()
@@ -51,6 +54,7 @@ class GenTargets(nn.Module):
         reg_targets_all_level=[]
         assert len(self.strides)==len(cls_logits)
         for level in range(len(cls_logits)):
+        # for level in range(1):
             level_out=[cls_logits[level],cnt_logits[level],reg_preds[level]]
             level_targets=self._gen_level_targets(level_out,gt_boxes,classes,self.strides[level],
                                                     self.limit_range[level])
@@ -89,6 +93,19 @@ class GenTargets(nn.Module):
 
         x=coords[:,0]
         y=coords[:,1]
+        # l_off_s = x.unsqueeze(dim=0).unsqueeze(dim=-1)
+        # print("x hspae is", x.shape)
+        # print("y shape is", y.shape)
+        # print("x is", x)
+        # print("y is", y)
+        # print("x[None,:,None] is", x[None,:,None])
+        # print("x[None,:,None] shape is", x[None,:,None].shape)
+        # print("x.squeeze shape is", l_off_s)
+        # print("x.squeeze shape is", l_off_s.shape)
+        # print("gt_boxes is", gt_boxes)
+        # print("gt_boxes is", gt_boxes.shape)
+        # print("gt_boxes[...,0] is", gt_boxes[...,0])
+        # print("gt_boxes[...,0][:,None,:] is", gt_boxes[...,0][:,None,:])
         l_off=x[None,:,None]-gt_boxes[...,0][:,None,:]#[1,h*w,1]-[batch_size,1,m]-->[batch_size,h*w,m]
         t_off=y[None,:,None]-gt_boxes[...,1][:,None,:]
         r_off=gt_boxes[...,2][:,None,:]-x[None,:,None]
@@ -144,9 +161,15 @@ class GenTargets(nn.Module):
         cls_targets[~mask_pos_2]=0#[batch_size,h*w,1]
         cnt_targets[~mask_pos_2]=-1
         reg_targets[~mask_pos_2]=-1
-        
+
+        # print("ori class_targets is", cls_targets)
+        # print("ori centerness_targets is", cnt_targets)
+        # print("ori regression_targetsis", reg_targets)
+
         return cls_targets,cnt_targets,reg_targets
-        
+
+
+
 
 
 def compute_cls_loss(preds,targets,mask):
@@ -173,9 +196,6 @@ def compute_cls_loss(preds,targets,mask):
     for batch_index in range(batch_size):
         pred_pos=preds[batch_index]#[sum(_h*_w),class_num]
         target_pos=targets[batch_index]#[sum(_h*_w),1]
-        # print("target_pos is", target_pos)
-        # print("target_pos is", target_pos.shape)
-        # print("torch.arange(1,class_num+1,device=target_pos.device)[None,:] is", torch.arange(1,class_num,device=target_pos.device)[None,:])
         target_pos=(torch.arange(1,class_num+1,device=target_pos.device)[None,:]==target_pos).float()#sparse-->onehot
         # target_pos=(torch.arange(0,class_num,device=target_pos.device)[None,:]==target_pos).float()#sparse-->onehot
         loss.append(focal_loss_from_logits(pred_pos,target_pos).view(1))
@@ -315,6 +335,176 @@ class LOSS(nn.Module):
         else:
             total_loss=cls_loss+reg_loss+cnt_loss*0.0
             return cls_loss,cnt_loss,reg_loss,total_loss
+
+class fcosnet_loss(nn.Module):
+    def __init__(self):
+        super().__init__()
+
+    def forward(self, inputs, add_centerness):
+        preds, targets = inputs
+        cls_logits, cnt_logits, reg_preds = preds
+        cls_targets, cnt_targets, reg_targets = targets
+        mask_pos = (cnt_targets > -1).squeeze(dim=-1)  # [batch_size,sum(_h*_w)]
+        cls_loss = compute_cls_loss(cls_logits, cls_targets, mask_pos).mean()  # []
+        cnt_loss = compute_cnt_loss(cnt_logits, cnt_targets, mask_pos).mean()
+        reg_loss = compute_reg_loss(reg_preds, reg_targets, mask_pos).mean()
+        if add_centerness:
+            total_loss = cls_loss + cnt_loss + reg_loss
+            return cls_loss, cnt_loss, reg_loss, total_loss
+        else:
+            total_loss = cls_loss + reg_loss + cnt_loss * 0.0
+            return cls_loss, cnt_loss, reg_loss, total_loss
+
+
+def feature2real_coords(feature, stride):
+    h, w = feature.shape[1:3]
+    shifts_x = torch.arange(0, w*stride, stride, dtype=torch.float32)
+    shifts_y = torch.arange(0, h*stride, stride, dtype=torch.float32)
+    shift_y, shift_x = torch.meshgrid(shifts_y, shifts_x)
+    shift_x = torch.reshape(shift_x, [-1])
+    shift_y = torch.reshape(shift_y, [-1])
+    coords = torch.stack([shift_x, shift_y], -1) + stride//2
+    return coords
+
+
+class fcosnet_loss(nn.Module):
+    def __init__(self):
+        super().__init__()
+
+    def forward(self,inputs, add_centerness):
+        '''
+        inputs list
+        [0]preds:  ....
+        [1]targets : list contains three elements [[batch_size,sum(_h*_w),1],[batch_size,sum(_h*_w),1],[batch_size,sum(_h*_w),4]]
+        '''
+        preds,targets=inputs
+        cls_logits,cnt_logits,reg_preds=preds
+        cls_targets,cnt_targets,reg_targets=targets
+        mask_pos=(cnt_targets>-1).squeeze(dim=-1)# [batch_size,sum(_h*_w)]
+        cls_loss=compute_cls_loss(cls_logits,cls_targets,mask_pos).mean()#[]
+        cnt_loss=compute_cnt_loss(cnt_logits,cnt_targets,mask_pos).mean()
+        reg_loss=compute_reg_loss(reg_preds,reg_targets,mask_pos).mean()
+        if add_centerness:
+            total_loss=cls_loss+cnt_loss+reg_loss
+            return cls_loss,cnt_loss,reg_loss,total_loss
+        else:
+            total_loss=cls_loss+reg_loss+cnt_loss*0.0
+            return cls_loss,cnt_loss,reg_loss,total_loss
+
+
+class generate_fcos_targets(nn.Module):
+    def __init__(self, strides, limit_range):
+        super().__init__()
+        self.strides = strides
+        self.limit_range = limit_range
+        assert len(strides) == len(limit_range)
+
+    def forward(self, inputs):
+        '''
+        inputs
+        [0]list [cls_logits,cnt_logits,reg_preds]
+        cls_logits  list contains five [batch_size,class_num,h,w]
+        cnt_logits  list contains five [batch_size,1,h,w]
+        reg_preds   list contains five [batch_size,4,h,w]
+        [1]gt_boxes [batch_size,m,4]  FloatTensor
+        [2]classes [batch_size,m]  LongTensor
+        Returns
+        cls_targets:[batch_size,sum(_h*_w),1]
+        cnt_targets:[batch_size,sum(_h*_w),1]
+        reg_targets:[batch_size,sum(_h*_w),4]
+        '''
+        class_logits, centerness_logits, regression_logits = inputs[0]
+        gt_boxes = inputs[1]
+        gt_classes = inputs[2]
+        class_targets_all_level = []
+        centerness_targets_al_level = []
+        regression_targets_all_level = []
+        assert len(self.strides)==len(class_logits)
+        for level in range(len(class_logits)):
+        # for level in range(1):
+            current_level_out = [class_logits[level], centerness_logits[level], regression_logits[level]]
+            current_level_targets = self._gen_level_targets(current_level_out, gt_boxes, gt_classes, self.strides[level], self.limit_range[level])
+            class_targets_all_level.append(current_level_targets[0])
+            centerness_targets_al_level.append(current_level_targets[1])
+            regression_targets_all_level.append(current_level_targets[2])
+        return torch.cat(class_targets_all_level, dim=1), torch.cat(centerness_targets_al_level, dim=1), torch.cat(
+            regression_targets_all_level, dim=1)
+
+    def _gen_level_targets(self, out, gt_boxes, classes, stride, limit_range, sample_radiu_ratio=1.5):
+        '''
+        Args
+        out list contains [[batch_size,class_num,h,w],[batch_size,1,h,w],[batch_size,4,h,w]]
+        gt_boxes [batch_size,m,4].
+        classes [batch_size,m]
+        stride int
+        limit_range list [min,max]
+        Returns
+        cls_targets,cnt_targets,reg_targets
+        '''
+        class_logits, centerness_logits, regression_logits = out
+        batch_size = class_logits.shape[0]
+        class_num = class_logits.shape[1]
+        m = gt_boxes.shape[1]
+
+        class_logits, centerness_logits, regression_logits = class_logits.permute(0, 2, 3, 1), centerness_logits.permute(0, 2, 3, 1), regression_logits.permute(0,2 ,3, 1)
+        real_coords = feature2real_coords(class_logits, stride).to(device=gt_boxes.device) # get featuremap to ori image box centern coords in own strides
+
+        class_logits = class_logits.reshape((batch_size, -1, class_num)) # [batch_size, h*w, class_num]
+        centerness_logits = centerness_logits.reshape((batch_size, -1, 1)) #[batch_size, h*w, 1]
+        regression_preds = regression_logits.reshape((batch_size, -1, 4)) #[batch_size, h*w, 4]
+        h_mul_w = class_logits.shape[1]
+
+        x = real_coords[:,0]
+        y = real_coords[:,1]
+        left_offset = x.unsqueeze(dim=0).unsqueeze(dim=-1) - gt_boxes[..., 0].unsqueeze(dim=-2)
+        top_offset = y.unsqueeze(dim=0).unsqueeze(dim=-1) - gt_boxes[..., 1].unsqueeze(dim=-2)
+        right_offset = gt_boxes[..., 2].unsqueeze(dim=-2) - x.unsqueeze(dim=0).unsqueeze(dim=-1)
+        bottom_offsets = gt_boxes[..., 3].unsqueeze(dim=-2) - y.unsqueeze(dim=0).unsqueeze(dim=-1)    #[batch_size, h*m, 4]
+        left_top_right_bottom_offsets = torch.stack([left_offset, top_offset, right_offset, bottom_offsets], dim=-1) #[batch_size, h*w, m, 4]
+        areas = (left_top_right_bottom_offsets[..., 0]+left_top_right_bottom_offsets[..., 2]) * (left_top_right_bottom_offsets[..., 1]+left_top_right_bottom_offsets[..., 3])
+        off_min = torch.min(left_top_right_bottom_offsets, dim=-1)[0]  # [batch_size,h*w,m]
+        off_max = torch.max(left_top_right_bottom_offsets, dim=-1)[0]  # [batch_size,h*w,m]
+        mask_in_gtboxes = off_min > 0  #get have obj coords pixes
+        mask_in_level = (off_max > limit_range[0]) &(off_max <= limit_range[1]) # get obj in this limit regression area
+        radius = stride * sample_radiu_ratio
+        gt_center_x = (gt_boxes[..., 0] + gt_boxes[..., 2])/2
+        gt_center_y = (gt_boxes[..., 1] + gt_boxes[..., 3])/2
+        center_left_offsets = x.unsqueeze(dim=0).unsqueeze(dim=-1) - gt_center_x.unsqueeze(dim=-2)  # [1,h*w,1]-[batch_size,1,m]-->[batch_size,h*w,m]
+        center_top_offsets  = y.unsqueeze(dim=0).unsqueeze(dim=-1) - gt_center_y.unsqueeze(dim=-2)
+        center_right_offsets = gt_center_x.unsqueeze(dim=-2) - x.unsqueeze(dim=0).unsqueeze(dim=-1)
+        center_bottom_offsets = gt_center_y.unsqueeze(dim=-2) - y.unsqueeze(dim=0).unsqueeze(dim=-1)
+        center_ltrb_offsets = torch.stack([center_left_offsets, center_top_offsets, center_right_offsets, center_bottom_offsets], dim=-1) #[batch_size, h*m, m, 4]
+        c_off_max = torch.max(center_ltrb_offsets, dim=-1)[0]
+        mask_center = c_off_max < radius
+
+        mask_pos = mask_in_gtboxes & mask_in_level & mask_center
+        areas[~mask_pos] = 9999999
+        areas_min_ind = torch.min(areas, dim=-1)[1]
+        regression_targets = left_top_right_bottom_offsets[torch.zeros_like(areas, dtype=torch.bool).scatter_(-1, areas_min_ind.unsqueeze(dim=-1),  1)]# [batch_size*h*w,4]
+        regression_targets = torch.reshape(regression_targets, (batch_size, -1 , 4))
+        classes = torch.broadcast_tensors(classes.unsqueeze(dim=1), areas.long())[0]  # [batch_size,h*w,m]
+        class_targets = classes[torch.zeros_like(areas, dtype=torch.bool).scatter_(-1, areas_min_ind.unsqueeze(dim=-1), 1)]
+        class_targets = torch.reshape(class_targets, (batch_size, -1, 1))  # [batch_size,h*w,1]
+        left_right_min = torch.min(regression_targets[..., 0], regression_targets[..., 2])  # [batch_size,h*w]
+        left_right_max = torch.max(regression_targets[..., 0], regression_targets[..., 2])
+        top_bottom_min = torch.min(regression_targets[..., 1], regression_targets[..., 3])
+        top_bottom_max = torch.max(regression_targets[..., 1], regression_targets[..., 3])
+        centerness_targets = ((left_right_min * top_bottom_min) / (left_right_max * top_bottom_max + 1e-10)).sqrt().unsqueeze(dim=-1)  # [batch_size,h*w,1]
+
+        assert regression_targets.shape == (batch_size, h_mul_w, 4)
+        assert class_targets.shape == (batch_size, h_mul_w, 1)
+        assert centerness_targets.shape == (batch_size, h_mul_w, 1)
+
+        # process neg coords
+        mask_pos_2 = mask_pos.long().sum(dim=-1)  # [batch_size,h*w]
+        # num_pos=mask_pos_2.sum(dim=-1)
+        # assert num_pos.shape==(batch_size,)
+        mask_pos_2 = mask_pos_2 >= 1
+        assert mask_pos_2.shape == (batch_size, h_mul_w)
+        class_targets[~mask_pos_2] = 0  # [batch_size,h*w,1]
+        centerness_targets[~mask_pos_2] = -1
+        regression_targets[~mask_pos_2] = -1
+        return class_targets, centerness_targets, regression_targets
 
 
 if __name__=="__main__":

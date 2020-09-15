@@ -1,8 +1,8 @@
 import torch.nn as nn
 import torch
-from models.backbone import resnet, mobilenetv2, resnext
-from models.fpn_type import fpn, fcos_fpn
-from models.head_type import retinanet_head, fcos_head
+from models.backbone import resnet, mobilenetv2, resnext, resnet_quant
+from models.fpn_type import fpn, fcos_fpn, fpn_quant, fcos_fpn_quant
+from models.head_type import retinanet_head, fcos_head, retinanet_head_quant, fcos_head_quant
 from models.loss_type import retinanet_loss, fcosnet_loss
 from models.anchor_type import anchors
 from models.post_process_type import retinanet_post_process, fcos_post_process
@@ -19,17 +19,23 @@ model_factory = {
     'wide_resnet_50':  resnext.wide_resnet50_2,
     'wide_resnet_101': resnext.wide_resnet101_2,
     'mobilenetv_2':     mobilenetv2.mobilenet_v2,
+    'resnet_quant_18':        resnet_quant.resnet18,
+    'resnet_quant_34':        resnet_quant.resnet34,
+    'resnet_quant_50':        resnet_quant.resnet50,
+    'resnet_quant_101':       resnet_quant.resnet101,
+    'resnet_quant_152':       resnet_quant.resnet152,
+
 }
 
 fpn_factory = {
-    "normal_fpn": fpn.FPN,
-    "fcosnet_fpn": fcos_fpn.FPN,
+    "normal_fpn": fpn_quant.FPN,
+    "fcosnet_fpn": fcos_fpn_quant.FPN,
 }
 
 head_factory = {
-    "normal_head_class": retinanet_head.ClassificationHead,
-    "normal_head_regression": retinanet_head.RegressionHead,
-    "fcos_head": fcos_head.class_centerness_regression_head,
+    "normal_head_class": retinanet_head_quant.ClassificationHead,
+    "normal_head_regression": retinanet_head_quant.RegressionHead,
+    "fcos_head": fcos_head_quant.class_centerness_regression_head,
 }
 
 loss_factory = {

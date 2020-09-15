@@ -3,15 +3,15 @@ In this project, i want to reproduce some object detections,now, just make retin
 voc dataset: first commit voc/coco map,  letterbox_resize(u can easily get this result from official pretrained models):
 
 
-    voc(input_size(608, 1024)): retinanet(epoch)        fcosnet(epoch)        fcosnet(epoch-1333x800)
+    voc(input_size(608, 1024)): retinanet(epoch)        fcosnet(epoch)        retinanet(google-INQ)   retinanet(dorefa)       fcosnet(epoch-1333x800)
 
-        1.resnet_50             0.777(16)               0.763(18)             0.773(11)
+        1.resnet_50             0.777(16)               0.763(18)                   0.777(14)                nan                   0.773(11)
 
-        2.resnet_101            0.792(19)               0.792(19)             0.803(14)
+        2.resnet_101            0.792(19)               0.792(19)                                                                  0.803(14)
 
-        3.resnext_50_32x4d      0.793(16)               0.769(15)             0.786(16)
+        3.resnext_50_32x4d      0.793(16)               0.769(15)                                                                  0.786(16)
 
-        4.resnext_101_64x8d     0.825(10)               0.815(16)
+        4.resnext_101_64x8d     0.825(10)               0.815(16)                                                                  0.8
 
         5.wide_resnet_50        0.801(26)               0.795(26)
 
@@ -22,7 +22,7 @@ voc dataset: first commit voc/coco map,  letterbox_resize(u can easily get this 
 
 coco dataset:
 
-    coco(resnet50-epoch30):
+    coco(resnet50-epoch15-(608, 1024):
 
          Average Precision  (AP) @[ IoU=0.50:0.95 | area=   all | maxDets=100 ] = 0.297
          Average Precision  (AP) @[ IoU=0.50      | area=   all | maxDets=100 ] = 0.481
@@ -37,7 +37,9 @@ coco dataset:
          Average Recall     (AR) @[ IoU=0.50:0.95 | area=medium | maxDets=100 ] = 0.532
          Average Recall     (AR) @[ IoU=0.50:0.95 | area= large | maxDets=100 ] = 0.641
 
-how to train your own dataset:
+train model:
+
+    how to train your own dataset:
 
     1. create dataset, make your dataset become txt file: just like this:
 
@@ -50,3 +52,24 @@ how to train your own dataset:
     3.edit train/val file in cfg/net_config.py
 
     4.python main_fcos.py/main_retinanet.py
+
+
+prune model:
+
+    add prune code in resnet or resnext:
+
+        in github, lots of pruning code is according to sliming prune,  i want to use dynamic pruning, means traing and pruning at the same time.
+
+        this code i will update in some times
+
+        20200913 updates: the first public prune version only support L1_norm pruning and only support resnet, u can just edit backbone in net_cfg.py
+
+add quant_code:
+
+    Reference to other work, i commit quant_code in my project, the paper is:
+
+    1. Quantizing deep convolutional networks for efficient inference: A whitepaper
+
+    2. Quantization and Training of Neural Networks for Efficient Integer-Arithmetic-Only Inference
+
+    3. DoReFa-Net: Training Low Bitwidth Convolutional Neural Networks with Low Bitwidth Gradients

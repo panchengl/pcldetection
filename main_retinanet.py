@@ -65,18 +65,19 @@ def main():
             del regression_loss
         scheduler.step(np.mean(epoch_loss))
         print('Evaluating dataset')
-        mAP = evaluate_datasets(dataset_val, retinanet, cfg["dataset"]["type"], iou_threshold=cfg["iou_threshold"], score_threshold=cfg["score_threshold"], max_detections=cfg["max_detections"])
-        if mAP != None:
-            if mAP["mean_ap"] > best_ap:
-                best_ap = mAP["mean_ap"]
-                checkpoint = {"net":retinanet.state_dict(), "optimizer":optimizer.state_dict(), "epoch":epoch_num}
-                torch.save(checkpoint, os.path.join(cfg["save_dir"], '{}_retinanet_epoch_{}_{}_map_{}_lr_{}.pt'.format(
-                cfg["dataset"]["type"], epoch_num, (cfg["backbone"]["type"] + '_' + cfg["backbone"]["depth"]), str(round(mAP['mean_ap'], 3)),  str(float(optimizer.param_groups[0]["lr"])) ) ) )
-        else:
-            print("The coco calculation standard uses its own parameters,just like conf=0.05, iou=[0.1.....0.9..]")
-            torch.save(retinanet.module, '{}_retinanet_{}.pt'.format(cfg["dataset"]["type"], epoch_num))
-        # scheduler.step(mAP["mean_ap"])
-        retinanet.eval()
+        if epoch_num >= 10:
+            mAP = evaluate_datasets(dataset_val, retinanet, cfg["dataset"]["type"], iou_threshold=cfg["iou_threshold"], score_threshold=cfg["score_threshold"], max_detections=cfg["max_detections"])
+            if mAP != None:
+                if mAP["mean_ap"] > best_ap:
+                    best_ap = mAP["mean_ap"]
+                    checkpoint = {"net":retinanet.state_dict(), "optimizer":optimizer.state_dict(), "epoch":epoch_num}
+                    torch.save(checkpoint, os.path.join(cfg["save_dir"], '{}_retinanet_epoch_{}_{}_map_{}_lr_{}.pt'.format(
+                    cfg["dataset"]["type"], epoch_num, (cfg["backbone"]["type"] + '_' + cfg["backbone"]["depth"]), str(round(mAP['mean_ap'], 3)),  str(float(optimizer.param_groups[0]["lr"])) ) ) )
+            else:
+                print("The coco calculation standard uses its own parameters,just like conf=0.05, iou=[0.1.....0.9..]")
+                torch.save(retinanet.module, '{}_retinanet_{}.pt'.format(cfg["dataset"]["type"], epoch_num))
+            # scheduler.step(mAP["mean_ap"])
+            retinanet.eval()
     torch.save(retinanet, 'model_final.pt')
 
 

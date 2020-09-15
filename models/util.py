@@ -137,8 +137,6 @@ class BBoxTransform(nn.Module):
                 self.std = torch.from_numpy(np.array([0.1, 0.1, 0.2, 0.2]).astype(np.float32))
         else:
             self.std = std
-        print("self.std is", self.std)
-        print("self.mean is", self.mean)
 
     def forward(self, boxes, deltas):
 
@@ -185,12 +183,26 @@ class ClipBoxes(nn.Module):
 
 def load_model(model, optimizer, model_dir):
     checkpoint_dict = torch.load(model_dir)
-    model.load_state_dict(checkpoint_dict["net"], strict=True)
-    optimizer.load_state_dict(checkpoint_dict["optimizer"])
+    model.load_state_dict(checkpoint_dict["net"], strict=False)
+    # optimizer.load_state_dict(checkpoint_dict["optimizer"])
     current_epoch = checkpoint_dict['epoch']
     net_name = str(model_dir).split("/")[-1].split("_")[4] +  '_' + str(model_dir).split("/")[-1].split("_")[5]
     print("finished restore model from {}, backbone is {}, retrain from epoch {}".format(model_dir, net_name, str(current_epoch)))
     return model, optimizer, current_epoch
+
+def load_model_sigle_gpu(model, model_dir):
+    checkpoint_single_gpu_dict = {}
+    checkpoint_dict = torch.load(model_dir)
+    for mutile_gpu_key, values in checkpoint_dict["net"].items():
+        single_gpu_key = mutile_gpu_key[7:]
+        checkpoint_single_gpu_dict[single_gpu_key] = values
+    model.load_state_dict(checkpoint_single_gpu_dict, strict=True)
+    current_epoch = checkpoint_dict['epoch']
+    # optimizer.load_state_dict(checkpoint_dict["optimizer"])
+    print("this function will not restore optimizer")
+    net_name = str(model_dir).split("/")[-1].split("_")[4] +  '_' + str(model_dir).split("/")[-1].split("_")[5]
+    print("finished restore model from {}, backbone is {}, retrain from epoch {}".format(model_dir, net_name, str(current_epoch)))
+    return model, current_epoch
 
 def create_datastes(cfg, **kwargs):
     from models.dataloader_type.dataloader import CSVDataset, Resizer, Augmenter, Normalizer, CocoDataset
