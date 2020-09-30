@@ -4,11 +4,14 @@ import numpy as np
 import torch
 import torch.optim as optim
 from torch.utils.data import DataLoader
+from torch.utils.tensorboard import SummaryWriter
+
 from models.dataloader_type.dataloader import collater, AspectRatioBasedSampler
 from models.util import load_model, create_datastes, load_model_sigle_gpu
-from utils.eval_util import evaluate_datasets
 from models.network import create_network
+from models.prune_type import prune_sliming
 from models.prune_network import create_network_prune
+from utils.eval_util import evaluate_datasets
 # from cfgs.fcosnet_cfg import model_cfg as cfg
 from cfgs.retinanet_prune_cfg import model_cfg as cfg
 from models.backbone import prune_resnet
@@ -25,13 +28,21 @@ def main():
     else:
         raise ValueError('Unsupported model depth, must be one of 18, 34, 50, 101, 152')
     assert cfg["restore_path"] is not None
+    if len(cfg["use_gpus"].replace(" ",'')) > 1:
+        model = torch.nn.DataParallel(model).cuda()
+    else:
+        model = torch.nn.DataParallel(model)
+    optimizer = optim.Adam(model.parameters(), lr=cfg["lr"])
+    scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, patience=3, verbose=True)
+    # scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode="max", patience=3, verbose=True)
+    # start_epoch = 0
     if len(cfg["restore_path"]) != 0:
-        model, start_epoch = load_model_sigle_gpu(model, cfg["restore_path"])
+        model, optimizer, start_epoch = load_model(model, optimizer, cfg["backbone"]["sliming_path"])
     print("wariming:  this version only support prune backbone, if u want prune whole network, u can add issues with me")
-    activate_channels_list, save_channels_list = prune_resnet.get_activate_channel_model(model, global_percent=cfg["backbone"]["prune_ration"])
+    activate_channels_list, save_channels_list = prune_resnet.get_activate_channel_sliming(model, global_percent=cfg["backbone"]["prune_ration"])
     prune_net = create_network_prune(cfg, activate_channels_list, save_channels_list)
     prune_net = prune_resnet.pruning(prune_net, model)
-    print(prune_net)
+    # print(prune_net)
     if len(cfg["use_gpus"].replace(" ",'')) > 1:
         prune_net = torch.nn.DataParallel(prune_net).cuda()
     else:
@@ -40,14 +51,16 @@ def main():
     optimizer = optim.Adam(prune_net.parameters(), lr=cfg["lr"])
     scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, patience=3, verbose=True)
     loss_hist = collections.deque(maxlen=500)
+    if len(cfg["backbone"]["prune_path"]) != 0:
+        model, optimizer, start_epoch = load_model(prune_net, optimizer, cfg["backbone"]["prune_path"])
     prune_net.train()
-    prune_net.module.freeze_bn()
+    # prune_net.module.freeze_bn()
     print('Num training images: {}'.format(len(dataset_train)))
+    optimizer.param_groups[0]['lr'] = 1.25e-4
     best_ap = 1e-5
-    for epoch_num in range(0, cfg["epochs"]):
+    for epoch_num in range(start_epoch+1, cfg["epochs"]):
         prune_net.train()
         prune_net.is_training = True
-        prune_net.module.freeze_bn()
         epoch_loss = []
         batch_num = (len(dataloader_train))
         print("begining current batch training, current training batch_num is %s"%(str(int(batch_num))))

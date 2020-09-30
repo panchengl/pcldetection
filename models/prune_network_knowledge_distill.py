@@ -126,9 +126,10 @@ class create_network_prune(nn.Module):
             regressions = torch.cat([self.RegressionHead(feature) for feature in features], dim=1)
             classifications = torch.cat([self.ClassificationHead(feature) for feature in features], dim=1)
             anchors = self.anchors(img_batch)
-            # print("anchors shape is", anchors.shape)
             if self.is_training:
-                return  self.loss(classifications, regressions, anchors, annotations, self.model_config["loss"]["positive_iou_thr"], self.model_config["loss"]["negative_iou_thr"])
+                # print("anchors shape is", anchors.shape)
+                return regressions, classifications
+                # return  self.loss(classifications, regressions, anchors, annotations, self.model_config["loss"]["positive_iou_thr"], self.model_config["loss"]["negative_iou_thr"])
             else:
                 return self.post_process(input_batch=img_batch, anchors=anchors, regressions=regressions, classifications=classifications)
         elif self.algorithm == "fcosnet":

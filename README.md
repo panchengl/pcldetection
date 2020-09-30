@@ -3,15 +3,15 @@ In this project, i want to reproduce some object detections,now, just make retin
 voc dataset: first commit voc/coco map,  letterbox_resize(u can easily get this result from official pretrained models):
 
 
-    voc(input_size(608, 1024)): retinanet(epoch)        fcosnet(epoch)        retinanet(google-INQ)   retinanet(dorefa)       fcosnet(epoch-1333x800)
+    voc(input_size(608, 1024)): retinanet(epoch)        fcosnet(epoch)     prune_retinanet(global_l1_norm)   retinanet(google-INQ)   retinanet(dorefa)       fcosnet(epoch-1333x800)
 
-        1.resnet_50             0.777(16)               0.763(18)                   0.777(14)                nan                   0.773(11)
+        1.resnet_50             0.777(16)               0.763(18)                     0.13(12-may be error)        0.777(14)                nan                   0.773(11)
 
-        2.resnet_101            0.792(19)               0.792(19)                                                                  0.803(14)
+        2.resnet_101            0.792(19)               0.792(19)                                                                                                 0.803(14)
 
-        3.resnext_50_32x4d      0.793(16)               0.769(15)                                                                  0.786(16)
+        3.resnext_50_32x4d      0.793(16)               0.769(15)                                                                                                 0.786(16)
 
-        4.resnext_101_64x8d     0.825(10)               0.815(16)                                                                  0.8
+        4.resnext_101_64x8d     0.825(10)               0.815(16)                                                                                                 0.8
 
         5.wide_resnet_50        0.801(26)               0.795(26)
 
@@ -63,9 +63,11 @@ prune model:
         this code i will update in some times
 
         20200913 updates: the first public prune version only support L1_norm pruning and only support resnet, u can just edit backbone in net_cfg.py
-        
-                          becareful: global l1-nnorm pruning is not effective, in my expercence and other project(yolov3_prune and centernet_prune), global pruning is ok
 
+                          becareful: global l1-nnorm pruning is not effective, in my expercence and other project(yolov3_prune and centernet_prune), global pruning is ok
+        20200930 updates:
+
+                         add sliming prune net code, add knowledge distill code to finetune prune code. use kl divergence as optimizer, u can edit loss weight and T in training steps.
 
 add quant_code:
 
@@ -76,3 +78,5 @@ add quant_code:
     2. Quantization and Training of Neural Networks for Efficient Integer-Arithmetic-Only Inference
 
     3. DoReFa-Net: Training Low Bitwidth Convolutional Neural Networks with Low Bitwidth Gradients
+
+        20200930 updates: add some quant code, but i have bno time to experiment

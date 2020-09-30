@@ -65,7 +65,7 @@ def main():
             del regression_loss
         scheduler.step(np.mean(epoch_loss))
         print('Evaluating dataset')
-        if epoch_num >= 10:
+        if epoch_num >= 0:
             mAP = evaluate_datasets(dataset_val, retinanet, cfg["dataset"]["type"], iou_threshold=cfg["iou_threshold"], score_threshold=cfg["score_threshold"], max_detections=cfg["max_detections"])
             if mAP != None:
                 if mAP["mean_ap"] > best_ap:

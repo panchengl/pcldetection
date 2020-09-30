@@ -191,7 +191,7 @@ class PrunedBottleneck(nn.Module):
 def get_str_num(value, str):
     return str.count(value,0,len(str))
 
-def get_activate_channel_model(model, global_percent=0.2):
+def get_activate_channel_norm(model, global_percent=0.2):
     import numpy as np
     index_weights = []
     layer_keep = 0.01
@@ -210,6 +210,71 @@ def get_activate_channel_model(model, global_percent=0.2):
                     layer_channels_weights.append(channels_sum_conv2 / (N_2 * H_2 * W_2))
                     index_weights.extend(channels_sum_conv1.cpu().numpy() / (N_1 * H_1 * W_1))
                     index_weights.extend(channels_sum_conv2.cpu().numpy() / (N_2 * H_2 * W_2))
+    sort_weights = np.sort(index_weights)
+    # print("sorted weights is", sort_weights)
+    # print("global_percent is", global_percent)
+    thr_weight = sort_weights[int(len(sort_weights) * global_percent)]
+    # print("thr is", thr_weight)
+    for curren_layer_weights in layer_channels_weights:
+        # print("curren_layer_weights is", curren_layer_weights)
+        mask = curren_layer_weights.cuda().gt(thr_weight).float()
+        # print("mask is", mask)
+        min_channel_num = int(len(curren_layer_weights) * layer_keep) if int(len(curren_layer_weights) * layer_keep) > 0 else 1
+        if int(torch.sum(mask)) < min_channel_num:
+            _, sorted_index_weights = torch.sort(curren_layer_weights, descending=True)
+            mask[sorted_index_weights[:min_channel_num]] = 1.
+        new_indices.append([i for i, x in enumerate(mask.cpu().numpy()) if x == 1])
+    saved_channels = []
+    for indice in new_indices:
+        saved_channels.append(len(indice))
+    print("warming: saved channels is: ", saved_channels)
+    print("warming: new indices is: ", new_indices)
+    return new_indices, saved_channels
+
+def get_activate_channel_sliming(model, global_percent=0.2):
+    import numpy as np
+    layer_keep = 0.01
+    new_indices = []
+    ori_channels = []
+    layer_bn_weights = []
+    if isinstance(model, torch.nn.DataParallel):
+        model = model.module
+    model = model.backbone
+    bn_weights = []
+    for layer in model.modules():
+        if isinstance(layer, nn.Sequential)  and "Bottleneck" in str(layer):
+            for m1 in layer.modules() :
+                if "Bottleneck" in str(m1) and len(list(m1.named_children())) > 6 and len(list(m1.named_children())) != 23 and len(list(m1.named_children())) != 36 and get_str_num("Bottleneck", str(m1)) !=8: #
+                    bn_weights.extend(torch.abs(m1.bn1.weight.data).cpu().numpy())
+                    layer_bn_weights.append(torch.abs(m1.bn1.weight.data) )
+                    ori_channels.append(torch.abs(m1.bn1.weight.data).shape[0])
+                    bn_weights.extend(torch.abs(m1.bn2.weight.data).cpu().numpy())
+                    layer_bn_weights.append(torch.abs(m1.bn2.weight.data))
+                    ori_channels.append(torch.abs(m1.bn2.weight.data).shape[0])
+    sort_bn_weights = np.sort(bn_weights)
+    # print("sorted weights is", sort_bn_weights)
+    # print("global_percent is", global_percent)
+    thr_bn_weight = sort_bn_weights[int(len(sort_bn_weights) * global_percent)]
+    # print("thr is", thr_bn_weight)
+    for curren_layer_weights in layer_bn_weights:
+        # print("curren_layer_weights is", curren_layer_weights)
+        mask = curren_layer_weights.cuda().gt(thr_bn_weight).float()
+        # print("mask is", mask)
+        min_channel_num = int(len(curren_layer_weights) * layer_keep) if int(len(curren_layer_weights) * layer_keep) > 0 else 1
+        if int(torch.sum(mask)) < min_channel_num:
+            _, sorted_index_weights = torch.sort(curren_layer_weights, descending=True)
+            mask[sorted_index_weights[:min_channel_num]] = 1.
+        new_indices.append([i for i, x in enumerate(mask.cpu().numpy()) if x == 1])
+    saved_channels = []
+    for indice in new_indices:
+        saved_channels.append(len(indice))
+    print("warming: orignal channels is : ", ori_channels)
+    print("warming: saved channels is   : ", saved_channels)
+    print("warming: new indices is      : ", new_indices)
+    return new_indices, saved_channels
+
+
+
     sort_weights = np.sort(index_weights)
     # print("sorted weights is", sort_weights)
     # print("global_percent is", global_percent)
@@ -289,6 +354,8 @@ def prune_net_parameter_init(prune_net, ori_net):
     import numpy as np
     indices = prune_net.backbone.activate_channels_list
     print("indices is", indices)
+    if isinstance(ori_net, torch.nn.DataParallel):
+        ori_net = ori_net.module
     prune_net.backbone.conv1.weight.data = ori_net.backbone.conv1.weight.data
     prune_net.backbone.bn1.weight.data = ori_net.backbone.bn1.weight.data
     prune_net.backbone.bn1.bias.data = ori_net.backbone.bn1.bias.data

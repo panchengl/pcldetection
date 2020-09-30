@@ -25,9 +25,9 @@ class Anchors(nn.Module):
         self.pyramid_levels = pyramid_levels
         self.scales = np.array(scales)
         self.ratios = np.array(ratios)
-        print("anchor rations: ", self.ratios )
-        print("anchor scales: ", self.scales )
-        print("feature anchor level is: ", self.pyramid_levels)
+        # print("anchor rations: ", self.ratios )
+        # print("anchor scales: ", self.scales )
+        # print("feature anchor level is: ", self.pyramid_levels)
         self.strides = [2 ** x for x in self.pyramid_levels]
         self.sizes = [2 ** (x + 2) for x in self.pyramid_levels]
 

@@ -61,18 +61,6 @@ def main():
                 continue
             loss.backward()
             torch.nn.utils.clip_grad_norm_(model.parameters(), 0.1)
-            # for layer in model.modules():
-            #     # print("current layer name is", layer)
-            #     if isinstance(layer, torch.nn.Conv2d):
-            #         # print(m)
-            #         # print(m.weight)
-            #         # print(m.weight.grad)
-            #         # print(m.weight.data)
-            #         if "Conv2d" in str(layer) and "Conv2d_dorefa" not in str(layer):
-            #             print("current layer name is", layer)
-            #             print("current layer grad is", layer.weight.grad)
-                    # m.weight.grad.data.add_(s * torch.sign(m.weight.data))
-
             optimizer.step()
             loss_hist.append(float(loss))
             epoch_loss.append(float(loss))
@@ -91,7 +79,7 @@ def main():
             if mAP["mean_ap"] > best_ap:
                 best_ap = mAP["mean_ap"]
                 checkpoint = {"net": model.state_dict(), "optimizer": optimizer.state_dict(), "epoch": epoch_num}
-                torch.save(checkpoint, os.path.join(cfg["save_dir"], '{}_model_epoch_{}_{}_map_{}_lr_{}.pt'.format(
+                torch.save(checkpoint, os.path.join(cfg["save_dir"], 'quant_{}_model_epoch_{}_{}_map_{}_lr_{}.pt'.format(
                     cfg["dataset"]["type"], epoch_num, (cfg["backbone"]["type"] + '_' + cfg["backbone"]["depth"]),
                     str(round(mAP['mean_ap'], 3)), str(float(optimizer.param_groups[0]["lr"])))))
         else:

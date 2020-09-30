@@ -1,6 +1,6 @@
 import torch.nn as nn
 from models.quant_type.quant_dorefa import Conv2d_dorefa
-from models.quant_type.quant_google import  BNFold_Conv2d_Q
+from models.quant_type.quant_google import  BNFold_Conv2d_Q, Conv2d_Q
 import torch
 
 
@@ -15,9 +15,9 @@ class RegressionHead(nn.Module):
     def _make_head(self, out_planes):
         layers = []
         for _ in range(4):
-            layers.append(  BNFold_Conv2d_Q(256, self.regression_channels, kernel_size=3, stride=1, padding=1))
+            layers.append(  Conv2d_dorefa(256, self.regression_channels, kernel_size=3, stride=1, padding=1))
             layers.append(nn.ReLU(True))
-        layers.append(  BNFold_Conv2d_Q(self.regression_channels, out_planes, kernel_size=3, stride=1, padding=1))
+        layers.append(  Conv2d_dorefa(self.regression_channels, out_planes, kernel_size=3, stride=1, padding=1))
         return nn.Sequential(*layers)
 
     def forward(self, input):
@@ -39,9 +39,9 @@ class ClassificationHead(nn.Module):
     def _make_head(self, out_planes):
         layers = []
         for _ in range(4):
-            layers.append(  BNFold_Conv2d_Q(256, self.classify_channels, kernel_size=3, stride=1, padding=1))
+            layers.append(  Conv2d_dorefa(256, self.classify_channels, kernel_size=3, stride=1, padding=1))
             layers.append(nn.ReLU(True))
-        layers.append(  BNFold_Conv2d_Q(256, out_planes, kernel_size=3, stride=1, padding=1))
+        layers.append(  Conv2d_dorefa(256, out_planes, kernel_size=3, stride=1, padding=1))
         return nn.Sequential(*layers)
 
     def forward(self, input):
@@ -56,19 +56,19 @@ class RegressionModel_variety_input(nn.Module):
     def __init__(self, num_features_in, num_anchors=9, feature_size=256):
         super(RegressionModel_variety_input, self).__init__()
 
-        self.conv1 =   BNFold_Conv2d_Q(num_features_in, feature_size, kernel_size=3, padding=1)
+        self.conv1 =   Conv2d_dorefa(num_features_in, feature_size, kernel_size=3, padding=1)
         self.act1 = nn.ReLU()
 
-        self.conv2 =   BNFold_Conv2d_Q(feature_size, feature_size, kernel_size=3, padding=1)
+        self.conv2 =   Conv2d_dorefa(feature_size, feature_size, kernel_size=3, padding=1)
         self.act2 = nn.ReLU()
 
-        self.conv3 =   BNFold_Conv2d_Q(feature_size, feature_size, kernel_size=3, padding=1)
+        self.conv3 =   Conv2d_dorefa(feature_size, feature_size, kernel_size=3, padding=1)
         self.act3 = nn.ReLU()
 
-        self.conv4 =   BNFold_Conv2d_Q(feature_size, feature_size, kernel_size=3, padding=1)
+        self.conv4 =   Conv2d_dorefa(feature_size, feature_size, kernel_size=3, padding=1)
         self.act4 = nn.ReLU()
 
-        self.output =   BNFold_Conv2d_Q(feature_size, num_anchors * 4, kernel_size=3, padding=1)
+        self.output =   Conv2d_dorefa(feature_size, num_anchors * 4, kernel_size=3, padding=1)
 
     def forward(self, x):
         out = self.conv1(x)
@@ -98,19 +98,19 @@ class ClassificationModel_variety_input(nn.Module):
         self.num_classes = num_classes
         self.num_anchors = num_anchors
 
-        self.conv1 =   BNFold_Conv2d_Q(num_features_in, feature_size, kernel_size=3, padding=1)
+        self.conv1 =   Conv2d_dorefa(num_features_in, feature_size, kernel_size=3, padding=1)
         self.act1 = nn.ReLU()
 
-        self.conv2 =   BNFold_Conv2d_Q(feature_size, feature_size, kernel_size=3, padding=1)
+        self.conv2 =   Conv2d_dorefa(feature_size, feature_size, kernel_size=3, padding=1)
         self.act2 = nn.ReLU()
 
-        self.conv3 =   BNFold_Conv2d_Q(feature_size, feature_size, kernel_size=3, padding=1)
+        self.conv3 =   Conv2d_dorefa(feature_size, feature_size, kernel_size=3, padding=1)
         self.act3 = nn.ReLU()
 
-        self.conv4 =   BNFold_Conv2d_Q(feature_size, feature_size, kernel_size=3, padding=1)
+        self.conv4 =   Conv2d_dorefa(feature_size, feature_size, kernel_size=3, padding=1)
         self.act4 = nn.ReLU()
 
-        self.output =   BNFold_Conv2d_Q(feature_size, num_anchors * num_classes, kernel_size=3, padding=1)
+        self.output =   Conv2d_dorefa(feature_size, num_anchors * num_classes, kernel_size=3, padding=1)
         self.output_act = nn.Sigmoid()
 
     def forward(self, x):
